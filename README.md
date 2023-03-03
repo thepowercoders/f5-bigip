@@ -5,7 +5,7 @@ This repo contains various F5 scripts and tools which I have developed in suppor
  
 ## Scripts
 
-### install_package
+### upload_package
 
 This script is used to install a iControl LX package (DO, AS3, TS ..etc). It was written as the [bigip-runtime-init](https://github.com/F5Networks/f5-bigip-runtime-init) was 
 failing for me when I was trying to install Telemetry Streaming due to a timeout (ref: [github issue 51](https://github.com/F5Networks/f5-bigip-runtime-init/issues/51)).
