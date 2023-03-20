@@ -1,7 +1,6 @@
 #!/bin/bash -x
 # NOTE: Startup Script is run once / initialization only (Cloud-Init behavior vs. typical re-entrant for Azure Custom Script Extension )
 # For 15.1+ and above, Cloud-Init will run the script directly and we can remove Azure Custom Script Extension 
-# Version - DCC-DM-Application, 220223 A.Millington/Avanade
 
 # create required directories for logging, storing runtime-init yaml config, and bigip packages (respectively):
 mkdir -p  /var/log/cloud /config/cloud /var/config/rest/downloads
