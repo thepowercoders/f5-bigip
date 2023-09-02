@@ -1,0 +1,35 @@
+{
+	"class": "Telemetry",
+	"controls": {
+		"class": "Controls",
+		"logLevel": "debug",
+		"debug": false
+	},
+	"tel-system-azuresentinel": {
+		"class": "Telemetry_System",
+		"trace": false,
+		"allowSelfSignedCert": true,
+		"host": "localhost",
+		"port": 8100,
+		"protocol": "http",
+		"systemPoller": {
+			"interval": 60
+		}
+	},
+	"tel-listener-azuresentinel": {
+		"class": "Telemetry_Listener",
+		"port": 6514
+	},
+	"tel-pushcon-azuresentinel": {
+		"class": "Telemetry_Consumer",
+		"type": "Azure_Log_Analytics",
+		"format": "propertyBased",
+		"trace": false,
+		"workspaceId": "{{workspace_id}}",
+		"passphrase": {
+			"cipherText": "{{primary-key}}"
+		},
+		"useManagedIdentity": false,
+		"region": "{{azure_region}}"
+	}
+}
