@@ -23,9 +23,6 @@
             "typeSettings": {
               "selectableValues": [
                 {
-                  "durationMs": 300000
-                },
-                {
                   "durationMs": 900000
                 },
                 {
@@ -71,7 +68,7 @@
               "allowCustom": true
             },
             "value": {
-              "durationMs": 300000
+              "durationMs": 3600000
             }
           }
         ],
@@ -84,7 +81,7 @@
     {
       "type": 1,
       "content": {
-        "json": "---\r\n## Network Firewall Insights"
+        "json": "---\r\n## Global Network Firewall Insights\r\nThis is a global view of firewall activity across the entire estate of BIG-IP devices."
       },
       "name": "text - 9"
     },
@@ -140,10 +137,47 @@
       "name": "query - 2"
     },
     {
+      "type": 1,
+      "content": {
+        "json": "> Select a Global Policy to filter firewall events to a particular environment. The report will aggregate firewall data across multiple devices as long as they have the same policy name. Select '*&lt;unset&gt;*' to view events globally:"
+      },
+      "name": "text - 23"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "c205414a-5af4-4731-824f-3c20eaf38bc3",
+            "version": "KqlParameterItem/1.0",
+            "name": "parmPolicy",
+            "label": "Global Policy",
+            "type": 2,
+            "query": "F5Telemetry_AFM_CL \r\n| where acl_policy_name_s != ''\r\n| distinct tostring(split(acl_policy_name_s, '/')[-1])\r\n",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 1800000
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": "nwfw-pol-dm-uks-eit-global"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 1 - Copy"
+    },
+    {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where hostname_s == '{HostName}' or '{HostName}' == \"All\"\r\n| where isempty(insp_id_s) and drop_reason_s != 'Connection Flow Miss'\r\n| summarize Count = count() by ['AFM Action'] = action_s, dest_ip_s\r\n| order by ['AFM Action'] asc",
+        "query": "F5Telemetry_AFM_CL \r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| where hostname_s == '{HostName}' or '{HostName}' == \"All\"\r\n| where isempty(insp_id_s) and drop_reason_s != 'Connection Flow Miss'\r\n| extend dest_ip_mod = strcat(dest_ip_s,\":\",dest_port_s)\r\n| join kind=leftouter (F5Telemetry_virtualServers_CL | distinct destination_s, name_s ) on $left.dest_ip_mod == $right.destination_s\r\n| summarize Count = count() by ['AFM Action'] = action_s, dest_ip_s, ['Target Virtual Server'] = tostring(split(name_s, '/')[-1])\r\n| order by ['AFM Action'] asc",
         "size": 0,
         "title": "AFM Policy Summary",
         "timeContextFromParameter": "parmTimeRange",
@@ -183,6 +217,12 @@
               "formatter": 8,
               "formatOptions": {
                 "palette": "bluePurple"
+              },
+              "numberFormat": {
+                "unit": 17,
+                "options": {
+                  "style": "decimal"
+                }
               }
             }
           ],
@@ -205,10 +245,17 @@
       "name": "query - 11 - Copy"
     },
     {
+      "type": 1,
+      "content": {
+        "json": "> **Note:** The target virtual server is calculated based on the incoming traffic destination IP and port - the combination of these 2 values are used for matching. If traffic is to a destination which does not have a virtual server, this field will be blank. Virtual Servers covering a subnet will also not be matched."
+      },
+      "name": "text - 24"
+    },
+    {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where context_type_s == 'Global'\r\n| where action_s == 'Drop' or action_s == 'Accept'\r\n| summarize Dropped = countif(action_s == 'Drop'), Accepted = countif(action_s == 'Accept') by bin(TimeGenerated, 1h)\r\n| render timechart\r\n",
+        "query": "F5Telemetry_AFM_CL \r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| where action_s == 'Drop' or action_s == 'Accept'\r\n| summarize Dropped = countif(action_s == 'Drop'), Accepted = countif(action_s == 'Accept') by bin(TimeGenerated, 15m)\r\n| render timechart\r\n",
         "size": 2,
         "title": "Policy Matches over Time Period",
         "timeContextFromParameter": "parmTimeRange",
@@ -229,15 +276,35 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where iff(isnotempty('{q15brush}'),TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| where context_type_s == 'Global'\r\n| where action_s == 'Drop' or action_s == 'Accept'\r\n| extend ruleName = tostring(split(acl_rule_name_s, ':')[-1])\r\n| where isnotempty(action_s) \r\n| summarize totalHits = count() by ['Rule Hits'] = ruleName \r\n",
+        "query": "F5Telemetry_AFM_CL\r\n| where iff(isnotempty('{q15brush}'),TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| where action_s == 'Drop' or action_s == 'Accept'\r\n| extend ruleName = tostring(split(acl_rule_name_s, ':')[-1])\r\n| where isnotempty(action_s) \r\n| summarize totalHits = count() by tostring(split(acl_rule_name_s, ':')[-1])\r\n",
         "size": 0,
-        "title": "Rule hits",
+        "title": "Total hits per rule",
+        "exportFieldName": "",
+        "exportParameterName": "parmRuleHits",
+        "exportDefaultValue": "null",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "piechart"
+        "visualization": "piechart",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "acl_rule_name_s__1",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "acl_rule_name_s__1",
+            "sortOrder": 2
+          }
+        ],
+        "chartSettings": {
+          "showLegend": true
+        }
       },
       "customWidth": "50",
-      "name": "query - 18",
+      "name": "query - 18 - Copy",
       "styleSettings": {
         "maxWidth": "50"
       }
@@ -246,10 +313,9 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where isempty(insp_id_s) and action_s == 'Accept'\r\n| where iff(isnotempty('{q15brush}'),TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| summarize Count = count() by ['Source IP'] = source_ip_s\r\n| order by Count\r\n| take 10",
+        "query": "F5Telemetry_AFM_CL \r\n| where isempty(insp_id_s)\r\n| where iff(isnotempty('{q15brush}'),TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| where '{parmRuleHits}' == 'null' or acl_rule_name_s contains todynamic('{parmRuleHits}').label\r\n| summarize Count = count() by ['Source IP'] = source_ip_s\r\n| order by Count\r\n| take 10",
         "size": 0,
-        "title": "Accepted Traffic",
-        "timeContextFromParameter": "q15brush",
+        "title": "Rule Hits per IP Address (click rule opposite to filter)",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "piechart"
@@ -271,8 +337,9 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where iff(isnotempty('{q15brush}'),TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| where isempty(insp_id_s) and action_s == 'Drop' and drop_reason_s != 'Connection Flow Miss'\r\n| summarize Count = count() by ['Source IP'] = source_ip_s\r\n| order by Count",
+        "query": "F5Telemetry_AFM_CL \r\n| where iff(isnotempty('{q15brush}'),TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| where isempty(insp_id_s) and action_s == 'Drop' and drop_reason_s != 'Connection Flow Miss'\r\n| summarize Count = count() by ['Source IP'] = source_ip_s\r\n| order by Count",
         "size": 0,
+        "title": "Rejections by Source IP",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "piechart"
@@ -287,9 +354,9 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where isempty(insp_id_s) and action_s == 'Drop' and drop_reason_s != 'Connection Flow Miss'\r\n| where iff(isnotempty('{q15brush}'),TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| summarize Count = count() by ['Source IP'] = source_ip_s\r\n| order by Count\r\n| take 10",
+        "query": "F5Telemetry_AFM_CL \r\n| where isempty(insp_id_s) and action_s == 'Drop' and drop_reason_s != 'Connection Flow Miss'\r\n| where iff(isnotempty('{q15brush}'),TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| summarize Count = count() by ['Source IP'] = source_ip_s\r\n| order by Count\r\n| take 10",
         "size": 0,
-        "title": "Top 10 Denied IPs",
+        "title": "Top 10 Denied Source IP Addresses",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "table",
@@ -422,7 +489,25 @@
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "\r\nF5Telemetry_AFM_CL\r\n| where context_type_s == 'Global' \r\n| distinct source_ip_s\r\n",
+            "query": "F5Telemetry_AFM_CL \r\n| where action_s == '{parmFilterAction}' or '{parmFilterAction}' == ''\r\n| where iff(isnotempty('{q15brush}') and {parmUseBrush} == 1 ,TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| distinct source_ip_s\r\n",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": []
+          },
+          {
+            "id": "3378c0d3-e3de-4d44-a79b-07d7fee77e12",
+            "version": "KqlParameterItem/1.0",
+            "name": "parmDestIP",
+            "label": "Destination IP",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "F5Telemetry_AFM_CL \r\n| where action_s == '{parmFilterAction}' or '{parmFilterAction}' == ''\r\n| where iff(isnotempty('{q15brush}') and {parmUseBrush} == 1 ,TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| distinct dest_ip_s\r\n",
             "typeSettings": {
               "additionalResourceOptions": [],
               "showDefault": false
@@ -430,7 +515,8 @@
             "queryType": 0,
             "resourceType": "microsoft.operationalinsights/workspaces",
             "value": [
-              "172.16.128.148"
+              "172.16.130.209",
+              "172.16.130.196"
             ]
           }
         ],
@@ -444,7 +530,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where action_s == '{parmFilterAction}' or '{parmFilterAction}' == ''\r\n| where iff(isnotempty('{q15brush}') and {parmUseBrush} == 1 ,TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| where isempty(insp_id_s) and drop_reason_s != 'Connection Flow Miss'\r\n| where isempty('{parmOrigIP:label}') or source_ip_s in (split('{parmOrigIP:label}', \",\"))\r\n| extend dest_ip_mod = strcat(dest_ip_s,\":\",dest_port_s)\r\n| join kind=leftouter (F5Telemetry_virtualServers_CL\r\n   | distinct destination_s, name_s ) on $left.dest_ip_mod == $right.destination_s\r\n| project TimeGenerated, tostring(split(acl_policy_name_s, '/')[-1]), tostring(split(acl_rule_name_s, ':')[-1]), action_s, source_ip_s, source_port_s, dest_ip_s, Port = strcat(tolower(ip_protocol_s), \"/\", dest_port_s), Virtual_Server = tostring(split(name_s, '/')[-1]) ,hostname_s\r\n| sort by toint(TimeGenerated) desc",
+        "query": "F5Telemetry_AFM_CL \r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| where action_s == '{parmFilterAction}' or '{parmFilterAction}' == ''\r\n| where iff(isnotempty('{q15brush}') and {parmUseBrush} == 1 ,TimeGenerated {q15brush},TimeGenerated {parmTimeRange})\r\n| where isempty(insp_id_s) and drop_reason_s != 'Connection Flow Miss'\r\n| where isempty('{parmOrigIP:label}') or source_ip_s in (split('{parmOrigIP:label}', \",\"))\r\n| where isempty('{parmDestIP:label}') or dest_ip_s in (split('{parmDestIP:label}', \",\"))\r\n| extend dest_ip_mod = strcat(dest_ip_s,\":\",dest_port_s)\r\n| join kind=leftouter (F5Telemetry_virtualServers_CL\r\n   | distinct destination_s, name_s ) on $left.dest_ip_mod == $right.destination_s\r\n| project \r\n    TimeGenerated,\r\n    ['Policy'] = tostring(split(acl_policy_name_s, '/')[-1]),\r\n    ['Policy Type'] = acl_policy_type_s,\r\n    ['Context Name'] = context_name_s,\r\n    ['Context Type'] = context_type_s,\r\n    ['Rule Name'] = tostring(split(acl_rule_name_s, ':')[-1]),\r\n    Action = action_s,\r\n    ['Drop Reason'] = drop_reason_s,\r\n    ['Source VLAN'] = tostring(split(vlan_s, '/')[-1]),\r\n    ['Source IP'] = source_ip_s,\r\n    ['Source Port'] = source_port_s,\r\n    ['Destination IP'] = dest_ip_s,\r\n    Port = strcat(tolower(ip_protocol_s), \"/\", dest_port_s),\r\n    ['Virtual Server'] = tostring(split(name_s, '/')[-1]),\r\n    ['bigip Hostname'] = hostname_s,\r\n    ['Error Message Name'] = errdefs_msg_name_s,\r\n    Severity = severity_s,\r\n    Partition = f5tenant_s\r\n| sort by toint(TimeGenerated) desc",
         "size": 0,
         "showAnalytics": true,
         "showRefreshButton": true,
@@ -454,7 +540,31 @@
         "gridSettings": {
           "formatters": [
             {
-              "columnMatch": "action_s",
+              "columnMatch": "Policy",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Policy Type",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Context Name",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Context Type",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Rule Name",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true
+              }
+            },
+            {
+              "columnMatch": "Action",
               "formatter": 18,
               "formatOptions": {
                 "thresholdsOptions": "colors",
@@ -479,8 +589,33 @@
                   }
                 ]
               }
+            },
+            {
+              "columnMatch": "Drop Reason",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Virtual Server",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "bigip Hostname",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Error Message Name",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Severity",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Partition",
+              "formatter": 5
             }
           ],
+          "rowLimit": 1000,
           "filter": true
         }
       },
@@ -494,12 +629,42 @@
       "name": "text - 9"
     },
     {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "29db1bb3-d93f-45ce-826b-246a00cedca9",
+            "version": "KqlParameterItem/1.0",
+            "name": "parmEnv",
+            "label": "Environment",
+            "type": 2,
+            "query": "F5Telemetry_AFM_CL \r\n| where f5tenant_s != ''\r\n| distinct f5tenant_s",
+            "typeSettings": {
+              "additionalResourceOptions": []
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": "dccdm-sitb"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 22"
+    },
+    {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where hostname_s == '{HostName}' or '{HostName}' == \"All\"\r\n| where isnotempty(insp_id_s)\r\n| summarize Count = count() by ['IPS Action'] = action_s, risk_s, insp_name_s\r\n| order by ['IPS Action'] asc",
+        "query": "F5Telemetry_AFM_CL \r\n| where f5tenant_s == '{parmEnv}' or '{parmEnv}' == ''\r\n| where isnotempty(insp_id_s)\r\n| summarize Count = count() by ['IPS Action'] = action_s, risk_s, insp_name_s\r\n| order by ['IPS Action'] asc",
         "size": 1,
         "title": "IDPS Summary",
+        "noDataMessage": "There were no Protocol Violations in the selected time period.",
         "timeContextFromParameter": "parmTimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
@@ -605,9 +770,10 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where hostname_s == '{HostName}' or '{HostName}' == \"All\"\r\n| where isnotempty(insp_id_s) \r\n| summarize count() by hostname_s, bin(TimeGenerated, {parmTimeRange:grain})",
+        "query": "F5Telemetry_AFM_CL \r\n| where f5tenant_s == '{parmEnv}' or '{parmEnv}' == ''\r\n| where isnotempty(insp_id_s) \r\n| summarize count() by hostname_s, bin(TimeGenerated, {parmTimeRange:grain})",
         "size": 0,
         "title": "IDPS violations over Time Period",
+        "noDataMessage": "There were no Protocol Violations in the selected time period.",
         "timeContextFromParameter": "parmTimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
@@ -619,9 +785,10 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where hostname_s == '{HostName}' or '{HostName}' == \"All\"\r\n| where isnotempty(insp_id_s) \r\n| summarize Total_Attacks = count() by insp_name_s\r\n| sort by Total_Attacks",
+        "query": "F5Telemetry_AFM_CL \r\n| where f5tenant_s == '{parmEnv}' or '{parmEnv}' == ''\r\n| where isnotempty(insp_id_s) \r\n| summarize Total_Attacks = count() by insp_name_s\r\n| sort by Total_Attacks",
         "size": 1,
         "title": "IDPS violations attacks",
+        "noDataMessage": "There were no Protocol Violations in the selected time period.",
         "timeContextFromParameter": "parmTimeRange",
         "exportFieldName": "insp_name_s",
         "exportParameterName": "attack_type",
@@ -659,8 +826,10 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where hostname_s == '{HostName}' or '{HostName}' == \"All\"\r\n| where '{attack_type}' == insp_name_s or '{attack_type}' == \"All\"\r\n| where isnotempty(insp_name_s) \r\n| summarize Total_Attacks = count() by ['Attack Type'] = insp_name_s \r\n| sort by Total_Attacks",
+        "query": "F5Telemetry_AFM_CL \r\n| where f5tenant_s == '{parmEnv}' or '{parmEnv}' == ''\r\n| where '{attack_type}' == insp_name_s or '{attack_type}' == \"All\"\r\n| where isnotempty(insp_name_s) \r\n| summarize Total_Attacks = count() by ['Attack Type'] = insp_name_s \r\n| sort by Total_Attacks",
         "size": 1,
+        "title": "Total Attacks",
+        "noDataMessage": "There were no Protocol Violations in the selected time period.",
         "timeContextFromParameter": "parmTimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
@@ -673,10 +842,11 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where hostname_s == '{HostName}' or '{HostName}' == \"All\"\r\n| where '{attack_type}' == insp_name_s or '{attack_type}' == \"All\"\r\n| where isnotempty(insp_id_s) \r\n| extend vs_array = split(virtual_server_name_s, '/')\r\n| project TimeGenerated, source_ip_s, action_s, risk_s ,hostname_s, Service = tostring(vs_array[-1]) , IPS_Profile = tostring(split(profile_name_s, '/')[-1]) \r\n| order by toint(risk_s) desc\r\n",
+        "query": "F5Telemetry_AFM_CL \r\n| where f5tenant_s == '{parmEnv}' or '{parmEnv}' == ''\r\n| where '{attack_type}' == insp_name_s or '{attack_type}' == \"All\"\r\n| where isnotempty(insp_id_s) \r\n| extend vs_array = split(virtual_server_name_s, '/')\r\n| project TimeGenerated, source_ip_s, action_s, risk_s ,hostname_s, Service = tostring(vs_array[-1]) , IPS_Profile = tostring(split(profile_name_s, '/')[-1]) \r\n| order by toint(risk_s) desc\r\n",
         "size": 0,
         "showAnalytics": true,
         "title": "Attack summary",
+        "noDataMessage": "There were no Protocol Violations in the selected time period.",
         "timeContextFromParameter": "parmTimeRange",
         "showRefreshButton": true,
         "showExportToExcel": true,
@@ -752,6 +922,8 @@
       },
       "name": "query - 13"
     }
+  ],
+  "fallbackResourceIds": [
   ],
   "fromTemplateId": "sentinel-UserWorkbook",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
