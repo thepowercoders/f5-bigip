@@ -2,7 +2,7 @@
 	"class": "Telemetry",
 	"controls": {
 		"class": "Controls",
-		"logLevel": "debug",
+		"logLevel": "info",
 		"debug": false
 	},
 	"tel-system-azuresentinel": {
@@ -12,24 +12,56 @@
 		"host": "localhost",
 		"port": 8100,
 		"protocol": "http",
-		"systemPoller": {
-			"interval": 60
-		}
+		"systemPoller": "tel-syspoll-azuresentinel"
+    },
+    "tel-syspoll-azuresentinel": {
+        "class": "Telemetry_System_Poller",
+        "interval": 60
 	},
-	"tel-listener-azuresentinel": {
-		"class": "Telemetry_Listener",
-		"port": 6514
+    "tel-listener-azuresentinel": {
+        "class": "Telemetry_Listener",
+        "port": 6514,
+        "enable": true,
+        "trace": false,
+        "match": "",
+        "actions": [
+            {
+                "setTag": {
+                    "tenant": "`T`",
+                    "application": "`A`"
+                },
+                "enable": true
+            },
+            {
+                "excludeData": {},
+                "ifAllMatch": {
+                    "Entity": "DNS_Offbox_All"
+                },
+                "locations": {
+                    "^.*$": true
+                }
+            },
+            {
+                "excludeData": {},
+                "ifAllMatch": {
+                        "Entity": "ProcessCpuUtil"
+                },
+                "locations": {
+                    "^.*$": true
+                }
+            }
+        ]
 	},
 	"tel-pushcon-azuresentinel": {
 		"class": "Telemetry_Consumer",
 		"type": "Azure_Log_Analytics",
 		"format": "propertyBased",
 		"trace": false,
-		"workspaceId": "{{workspace_id}}",
+		"workspaceId": "{{workspaceId}}",
 		"passphrase": {
-			"cipherText": "{{primary-key}}"
+			"cipherText": "{{primary_key}}"
 		},
 		"useManagedIdentity": false,
-		"region": "{{azure_region}}"
+		"region": "uksouth"
 	}
 }
