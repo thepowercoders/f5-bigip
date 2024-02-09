@@ -177,7 +177,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "F5Telemetry_AFM_CL \r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| where hostname_s == '{HostName}' or '{HostName}' == \"All\"\r\n| where isempty(insp_id_s) and drop_reason_s != 'Connection Flow Miss'\r\n| extend dest_ip_mod = strcat(dest_ip_s,\":\",dest_port_s)\r\n| join kind=leftouter (F5Telemetry_virtualServers_CL | distinct destination_s, name_s ) on $left.dest_ip_mod == $right.destination_s\r\n| summarize Count = count() by ['AFM Action'] = action_s, dest_ip_s, ['Target Virtual Server'] = tostring(split(name_s, '/')[-1])\r\n| order by ['AFM Action'] asc",
+        "query": "F5Telemetry_AFM_CL \r\n| where '{parmPolicy}' == '' or acl_policy_name_s contains '{parmPolicy}'\r\n| where hostname_s == '{HostName}' or '{HostName}' == \"All\"\r\n| where isnotempty(acl_policy_type_s) and drop_reason_s != 'Connection Flow Miss'\r\n| extend dest_ip_mod = strcat(dest_ip_s,\":\",dest_port_s)\r\n| join kind=leftouter (F5Telemetry_virtualServers_CL | distinct destination_s, name_s ) on $left.dest_ip_mod == $right.destination_s\r\n| summarize Count = count() by ['AFM Action'] = action_s, dest_ip_s, ['Target Virtual Server'] = tostring(split(name_s, '/')[-1])\r\n| order by ['AFM Action'] asc",
         "size": 0,
         "title": "AFM Policy Summary",
         "timeContextFromParameter": "parmTimeRange",
